@@ -1,0 +1,76 @@
+{
+  "generated_at": "2026-05-18T20:00:00+08:00",
+  "generator": "windows-backup skill v1.0",
+  "system": {
+    "username": "Administrator",
+    "os": "Windows 11 Pro",
+    "workspace_path": "E:\\桌面"
+  },
+  "git": {
+    "user_name": "AdgaiWalker",
+    "user_email": "15328084233@163.com"
+  },
+  "ssh": {
+    "has_keys": false,
+    "note": "此机器未使用 SSH 密钥，通过 HTTPS + credential manager 连接 GitHub"
+  },
+  "node": {
+    "versions": ["25.2.1", "22.22.0"],
+    "active_version": "25.2.1",
+    "npm_version": "11.6.2",
+    "pnpm_version": "10.26.1",
+    "pnpm_store_path": "E:\\.pnpm-store\\v10",
+    "npm_prefix": "D:\\it\\npm-global",
+    "npm_cache": "D:\\it\\npm-cache",
+    "npm_registry": "https://registry.npmjs.org/"
+  },
+  "python": {
+    "version": "3.14.0"
+  },
+  "vscode": {
+    "extensions": [
+      "factory.factory-vscode-extension",
+      "github.copilot-chat",
+      "highagency.pencildev",
+      "iflow-cli.iflow-cli-vscode-ide-companion",
+      "ms-azuretools.vscode-azure-github-copilot",
+      "ms-azuretools.vscode-azure-mcp-server",
+      "ms-azuretools.vscode-azureresourcegroups",
+      "ms-azuretools.vscode-containers",
+      "ms-ceintl.vscode-language-pack-zh-hans",
+      "ms-python.debugpy",
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "ms-python.vscode-python-envs",
+      "ms-vscode-remote.remote-containers",
+      "ms-vscode.cpptools",
+      "openai.chatgpt",
+      "saoudrizwan.claude-dev"
+    ],
+    "has_snippets": false
+  },
+  "chrome": {
+    "profiles_with_bookmarks": ["Guest Profile", "Profile 7", "Profile 8", "Profile 9"]
+  },
+  "npm_global_packages": [
+    "@ast-grep/cli",
+    "@google/gemini-cli",
+    "@iflow-ai/iflow-cli",
+    "@larksuite/cli",
+    "@openai/codex",
+    "@z_ai/coding-helper",
+    "chrome-devtools-mcp",
+    "openclaw",
+    "opencode-ai",
+    "playwright",
+    "serve",
+    "uipro-cli"
+  ],
+  "git_repos": [
+    { "name": "blog", "remote": "https://github.com/AdgaiWalker/AdgaiWalker.git" },
+    { "name": "FerrySpec世界自适应提示词工程框架", "remote": "https://github.com/AdgaiWalker/desk.git" },
+    { "name": "set-UX", "remote": "https://github.com/AdgaiWalker/set-app.git" },
+    { "name": "转化记录", "remote": "https://github.com/AdgaiWalker/Skills-Walker.git" },
+    { "name": "skills", "remote": "https://github.com/MiniMax-AI/skills.git" }
+  ]
+}
