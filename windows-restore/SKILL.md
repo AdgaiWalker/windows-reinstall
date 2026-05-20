@@ -241,9 +241,9 @@ foreach ($bs in $browserSources) {
 
 ---
 
-## 第二层：开发环境恢复（只有开发者模式）
+## 第二层：开发环境恢复（检测到开发配置时执行）
 
-只在 `user_type = "developer"` 时执行。
+如果 profile 中有 `type = "dev_config"` 的数据源，或者 `git_repos` 非空，就执行开发环境恢复。不依赖 `user_type` 字段。
 
 ### 路径替换
 
@@ -327,17 +327,30 @@ npm install -g @anthropic-ai/claude-code
 
 ---
 
-## 第三层：项目恢复（只有开发者模式）
+## 第三层：项目恢复（按 git_repos.action 处理）
 
 ```powershell
 foreach ($repo in $profile.git_repos) {
-    $workspace = $profile.system.workspace_path
-    if (-not (Test-Path $workspace)) {
-        $workspace = "$env:USERPROFILE\projects"
-        New-Item -ItemType Directory -Path $workspace -Force | Out-Null
+    $repoName = if ($repo.name) { $repo.name } else { Split-Path $repo.path -Leaf }
+
+    if ($repo.action -eq "clone") {
+        # 有远程且已推送，直接 clone
+        $workspace = if ($repo.path) { Split-Path $repo.path -Parent } else { $profile.system.workspace_path }
+        if (-not (Test-Path $workspace)) { New-Item -ItemType Directory -Path $workspace -Force | Out-Null }
+        git clone -b $repo.branch $repo.remote_url "$workspace\$repoName"
+        if ($LASTEXITCODE -ne 0) { Write-Output "$repoName clone 失败" }
+    } elseif ($repo.action -eq "backup") {
+        # 无远程，从备份目录恢复
+        $backupPath = Join-Path $backupRoot "extra\$repoName"
+        if (Test-Path $backupPath) {
+            $target = $repo.path
+            if (-not (Test-Path (Split-Path $target -Parent))) {
+                $target = "$env:USERPROFILE\projects\$repoName"
+            }
+            robocopy "$backupPath" "$target" /E /MT:8 /R:1 /W:1
+        }
     }
-    git clone $repo.remote "$workspace\$($repo.name)"
-    if ($LASTEXITCODE -ne 0) { Write-Output "$($repo.name) clone 失败" }
+    # action=skip → 不恢复
 }
 ```
 
@@ -369,8 +382,10 @@ foreach ($source in $profile.discovered_sources) {
     }
 }
 
-# 开发环境检查（开发者模式）
-if ($profile.user_type -eq "developer") {
+# 开发环境检查
+$hasDevConfigs = $profile.discovered_sources | Where-Object { $_.type -eq "dev_config" }
+$hasGitRepos = $profile.git_repos -and $profile.git_repos.Count -gt 0
+if ($hasDevConfigs -or $hasGitRepos) {
     Write-Output ""
     Write-Output "=== 开发环境检查 ==="
     git --version; node --version; pnpm --version
@@ -407,6 +422,63 @@ if (-not $profile.discovered_sources) {
 
 ---
 
+## 压缩包解压（如果备份是分卷压缩格式）
+
+如果备份目录下有 `.rar` 或 `.7z` 分卷文件（备份时走了云上传压缩流程），需要先解压再恢复。
+
+### 自动检测磁盘类型，选择并行策略
+
+```powershell
+# 检测解压目标盘是 SSD 还是 HDD
+function Get-DiskType {
+    param([string]$DriveLetter)
+    $letter = $DriveLetter.Substring(0,1)
+    $physicalDisk = Get-PhysicalDisk | Where-Object {
+        $_.BusType -ne "USB" -and $_.Number -in (Get-Partition -DriveLetter $letter -ErrorAction SilentlyContinue |
+            Get-Disk -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Number)
+    }
+    if ($physicalDisk) { return $physicalDisk.MediaType } else { return "Unknown" }
+}
+
+$targetType = Get-DiskType $restoreDrive
+$useParallel = ($targetType -eq "SSD")
+$maxWorkers = if ($useParallel) { 4 } else { 1 }
+Write-Output "解压目标盘: $targetType → $($maxWorkers)路$($useParallel ? '并行' : '串行')解压"
+```
+
+**原则：** 每个压缩包解压到独立目录（wechat → personal\wechat, desktop → personal\desktop），目录不重叠，并行解压安全。涉及 HDD 或 USB 外接盘 → 串行，避免 IO 争抢。
+
+### 执行解压
+
+```powershell
+# 检测备份目录下的压缩包
+$archives = Get-ChildItem $backupRoot -Filter "*.rar" -ErrorAction SilentlyContinue
+if (-not $archives) { $archives = Get-ChildItem $backupRoot -Filter "*.7z" -ErrorAction SilentlyContinue }
+
+if ($archives) {
+    Write-Output "检测到压缩包，先解压再恢复。"
+
+    # 按编号分组（01-wechat.part1.rar, 01-wechat.part2.rar → 同一组）
+    $groups = $archives | Group-Object { ($_.Name -split '\.part|\.rar|\.7z')[0] }
+
+    foreach ($group in $groups) {
+        $firstFile = $group.Group | Sort-Object Name | Select-Object -First 1
+        Write-Output "解压: $($firstFile.Name)"
+
+        if ($firstFile.Extension -eq ".rar") {
+            & "C:\Program Files\WinRAR\UnRAR.exe" x -o+ $firstFile.FullName "$backupRoot\"
+        } elseif ($firstFile.Extension -eq ".7z") {
+            & "C:\Program Files\7-Zip\7z.exe" x $firstFile.FullName -o"$backupRoot\" -y
+        }
+        # 并行模式下用 Start-Job 或 run_in_background 同时跑多个组（仅 SSD）
+    }
+
+    Write-Output "解压完成，继续按 discovered_sources 恢复。"
+}
+```
+
+---
+
 ## 注意事项
 
 - 按 discovered_sources 逐个恢复，不是按目录结构猜
@@ -417,3 +489,4 @@ if (-not $profile.discovered_sources) {
 - 浏览器密码需要手动导出
 - 未安装的工具（null/空数组）自动跳过
 - 兼容旧版 v1 备份格式
+- 压缩包解压：SSD 目标盘可并行，HDD/USB 外接盘串行，避免 IO 争抢
