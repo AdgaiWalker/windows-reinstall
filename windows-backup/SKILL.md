@@ -123,10 +123,35 @@ git -C $repoPath push origin $branch
 
 推送成功 → `action: clone`（备份时跳过，重装后 clone 恢复）。失败或无远程 → `action: backup`。
 
+**关键：构建 robocopy 排除列表。** `action: clone` 的仓库，整个目录都不需要 robocopy 备份（不只是 `.git`）。按备份源分组，收集每个源路径下需要排除的子目录名：
+
+```powershell
+# $repos 是 1.1 扫描的结果，每个有 Path, Remote, Action
+# 按备份源（如 E:\桌面）分组，收集需要排除的子目录
+$repoExcludeBySource = @{}
+foreach ($repo in $repos | Where-Object { $_.Action -eq 'clone' }) {
+    # 找到这个仓库属于哪个备份源
+    foreach ($source in $backupSources) {
+        if ($repo.Path -like "$($source.Path)\*" -or $repo.Path -eq $source.Path) {
+            if (-not $repoExcludeBySource[$source.Path]) {
+                $repoExcludeBySource[$source.Path] = @()
+            }
+            # 如果仓库路径就是源路径本身（如桌面根本身是 git 仓库），跳过——备份源本身就是仓库时不能排除自己
+            if ($repo.Path -ne $source.Path) {
+                $relativeDir = $repo.Path.Replace("$($source.Path)\", "")
+                $repoExcludeBySource[$source.Path] += $relativeDir
+            }
+        }
+    }
+}
+# 示例结果：$repoExcludeBySource["E:\桌面"] = @("blog", "set-UX", "skills", "转化记录", "AdgaiWalker")
+```
+
+将此列表传给第三步 robocopy 的 `/XD` 参数，避免重复备份已有远程的仓库。
+
 ### 1.2 浏览器书签导出（30 秒）
 
 检测已安装的浏览器，提醒用户手动导出书签和密码：
-
 ```powershell
 $userProfile = $env:USERPROFILE
 $browsers = @()
@@ -261,10 +286,31 @@ powercfg /change hibernate-timeout-ac 0
 
 ### 3.2 执行 robocopy
 
+<<<<<<< HEAD
 对每个 `backup: true` 的数据源并行执行：
 
 ```powershell
 robocopy.exe "<源路径>" "$backupRoot\<backup_target>" /E /MT:8 /R:2 /W:1 /XD node_modules .next .cache .pnpm-store dist build __pycache__ <.git（仅 action=clone 的仓库）> <类型专属排除> /XF Thumbs.db desktop.ini .DS_Store *.tmp *.temp ~$* *.bak *.dmp *.mdmp *.crash /NP /TEE /LOG:"$backupRoot\logs\<id>.log"
+=======
+对每个 `backup: true` 的数据源并行执行。**必须排除 `action: clone` 的仓库整个目录**（不只是 `.git`）：
+
+```powershell
+# 通用排除
+$commonXD = @("node_modules", ".next", ".cache", ".pnpm-store", "dist", "build", "__pycache__")
+
+# 对每个备份源，合并通用排除 + 该源下的 clone 仓库目录
+foreach ($source in $backupSources | Where-Object { $_.backup }) {
+    $xdArgs = $commonXD.Clone()
+    if ($repoExcludeBySource[$source.Path]) {
+        $xdArgs += $repoExcludeBySource[$source.Path]
+    }
+    # 如果备份源本身不是 git 仓库，也排除 .git（避免子目录的 .git 被复制）
+    # 如果备份源本身就是 action=clone 的仓库，排除 .git 但保留工作文件
+    $xdArgs += ".git"
+
+    robocopy.exe $source.Path "$backupRoot\$($source.backup_target)" /E /MT:8 /R:2 /W:1 /XD $xdArgs /XF Thumbs.db desktop.ini .DS_Store *.tmp *.temp ~$* *.bak *.dmp *.mdmp *.crash /NP /TEE /LOG:"$backupRoot\logs\$($source.id).log"
+}
+>>>>>>> cd05ce9 (feat: 排除有远程仓库的目录，避免重复备份)
 ```
 
 退出码 0-7 正常，≥8 报错。浏览器数据源额外排除 `Cache`, `Code Cache`, `GPUCache`, `Service Worker`, `blob_storage`, `IndexedDB`。
@@ -430,7 +476,11 @@ $maxWorkers = if ($targetType -eq "SSD") { 4 } else { 1 }
 8. **FAT32 单文件 4GB 限制** — 建议格式化为 exFAT
 9. **robocopy 退出码** — 0-7 正常，8+ 才报错（1 = 有文件被复制 = 成功）
 10. **重装范围不等于 C 盘** — 必须问用户哪些盘受影响
+<<<<<<< HEAD
 11. **Git 远程仓库不需要备份** — 有远程且已推送的，clone 即可恢复
+=======
+11. **Git 远程仓库不需要备份** — 有远程且已推送的，整个目录都不用 robocopy（不只是 .git），重装后 `git clone` 恢复。第一步扫描后按备份源分组收集排除列表，第三步 robocopy 通过 `/XD` 跳过
+>>>>>>> cd05ce9 (feat: 排除有远程仓库的目录，避免重复备份)
 12. **不要在扫描阶段花太多时间** — 列目录名就够了，大小让 robocopy 去算
 13. **备份期间防止休眠** — 长时间复制可能触发 Windows 休眠
 14. **Steam 游戏可跳过但存档要保留** — SteamLibrary\userdata 里是存档
