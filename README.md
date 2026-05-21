@@ -1,7 +1,8 @@
 # Windows Reinstall Toolkit
 
 Windows 重装系统的备份 + 还原工具集。配合 [Claude Code](https://claude.ai/code) 使用。
-
+主要支持[win11](https://www.microsoft.com/zh-cn/software-download/windows11)
+https://www.microsoft.com/zh-cn/software-download/windows10
 ## 设计理念
 
 **大多数数据要么能重新下载，要么备份了也恢复不了。真正不可替代的可能只有几个 GB。**
